@@ -4,16 +4,11 @@ library(dplyr)
 
 #Set Directory
 #Laptop 
-  setwd('C://Users//dmladenovski//Documents//R//DuskoPratice - Titanic')
+  #setwd('C://Users//dmladenovski//Documents//R//DuskoPratice - Titanic')
        
 #Home Pc
- #setwd('C://Users//Dusko (Guest)//Documents//GitHub//DuskoPratice---Titanic')
+ setwd('C://Users//Dusko (Guest)//Documents//GitHub//DuskoPratice---Titanic')
  
-  
-
-#List files names
-  files <- list.files()
-
 #Read in Files
   Test <- read.csv2('test.csv', stringsAsFactors = FALSE, sep = ',', na.strings = "")
   GenderSubmission <- read.csv2('test.csv', stringsAsFactors = FALSE, sep = ',', na.strings = "")
@@ -22,10 +17,17 @@ library(dplyr)
 
   Full <- bind_rows(Train, Test)
   
-#Change classes
+#Change classes for Full
   Full$Fare <- as.numeric(Full$Fare)
   Full$Age <- as.integer(Full$Age)
   Full$Survived <- as.factor(Full$Survived)
+  Full$Pclass <- as.factor(Full$Pclass)
+  
+#Change Classes for Test
+  Test$Fare <- as.numeric(Test$Fare)
+  Test$Age <- as.integer(Test$Age)
+  Test$Survived <- as.factor(Test$Survived)
+  Test$Pclass <- as.factor(Test$Pclass)
   
 #Add Title Column
   Full$Title <- gsub('(.*, )|(\\..*)', '', Full$Name)
@@ -75,11 +77,8 @@ library(dplyr)
 #Missing embarkment was 1st class and plenty of cabins in 'B' Cabin
   Full[Full$Fare >= 75 & Full$Fare <= 85 & Full$Title == 'Mr' & Full$Embarked == 'C',]
 
-  #Manually edit Embark point for missing data as C
+#Manually edit Embark point for missing data as C
   Full$Embarked[is.na(Full$Embarked)] <- 'C'
-
-#Recheck Attribute
-  table(Full$Embarked, Full$Survived)
 
 #Add Total Family Size
   Full$FamilySize <- Full$SibSp + Full$Parch + 1
@@ -89,11 +88,7 @@ library(dplyr)
     geom_bar(stat = "count", position = 'dodge') + 
     scale_x_continuous(breaks = 1:11) +
     theme_classic()
-  
-#Check Survived by Age
-  ggplot(Full[1:891,], aes(x = Age, fill = factor(Survived))) + 
-    geom_histogram(position = 'stack')+
-    facet_grid(.~Sex)
+
 
 #check missing 
   for (Var in names(Full)){
@@ -108,31 +103,34 @@ library(dplyr)
   Full$Child[Full$Age >= 18] <- "Adult"
   Full$Child[Full$Age < 18] <- "Child"
 
-  table(Full$Mother, Full$Survived)
-  table(Full$Child, Full$Survived)
-
-  
-#Attempting to use Decision Tree
-#library('party')
-  library('rpart')
-
 #check missing data
   colSums(is.na(Full))
   colSums(Full == '')
 
-#remove missing Age
+#predict missing Fare Price - Passenger ID 1044
+  Full[is.na(Full$Fare),]
+  
+  ggplot(
+    Full[Full$Embarked == 'S' & Full$Pclass == 3 & Full$Sex == 'male' & Full$FamilySize == 1 & Full$Age > 50,], 
+    aes(x = Age, y = Fare, col = Title))+
+    geom_point()+
+    geom_vline(xintercept = 61)+
+    geom_hline(yintercept = 7.25)
+  
+#Insert Fare for Passenger 1044
+  Full$Fare[is.na(Full$Fare)] <- 7.25
+  
 
-  FullAge <- Full[Full$Age != ''  & !is.na(Full$Age),]
-
-
-#predict Age
+  #predict Age
 install.packages('mice')
 library(mice)
 install.packages('randomForest')
 library('randomForest')
+#remove missing Age
+  FullAge <- Full[Full$Age != ''  & !is.na(Full$Age),]
+
 Train_mice <- mice(Full[, !names(Full) %in% 
                            c('PassengerId', 'Name', 'Ticket', 'Cabin', 'Survived')], method = 'rf')
-
 
 Train_complete <- complete(Train_mice)
 Train$Age <- as.numeric(Train$Age)
@@ -149,14 +147,46 @@ hist(Train$Age, freq=F, main='Age: Original Data',
 hist(Train_complete$Age, freq=F, main='Age: MICE Output', 
      col='lightgreen', ylim=c(0,0.04))
 
-Fit <- rpart(formula = Survived ~ Pclass + Sex  + Fare + Age + FamilySize, data = Full[1:400,], method = 'class')
 
-rpart::plotcp(Fit)
+
+
+#Guess Survival
+
+
+
+Fit <- rpart(formula = Survived ~ Pclass + Sex  + Fare + Age + SibSp + Parch, 
+             data = Full[1:400,], 
+             method = 'class')
+
+plotcp(Fit)
 plot(Fit, uniform = T)
 text(Fit, all = T, cex = .8)
 
-printcp(Fit)
-plotcp(Fit)
-rsq.rpart(Fit)
-summary(Fit)
-prune(Fit, Fit$cptable[which.min(Fit$cptable[,"xerror"]),"CP"])
+Test$Prediction <- predict(Fit, newdata = Test, type = "class")
+Test$Probability <- predict(Fit, newdata = Test, type = "prob")
+
+
+#Check Survived by Age / Sex
+ggplot(Full[1:891,], aes(x = Age)) + 
+  #geom_histogram(position = 'stack')+
+  geom_density()+
+  geom_density(data = Test)+
+  facet_grid(.~Sex)
+
+ggplot(Test, aes(x = Age, fill = factor(Prediction)))+ 
+  #geom_histogram(position = 'stack')+
+  geom_density(alpha = 0.4)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
