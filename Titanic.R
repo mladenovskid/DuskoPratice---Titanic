@@ -4,21 +4,21 @@ library(dplyr)
 
 #Set Directory
 #Laptop 
-# setwd('C://Users//dmladenovski//Documents//R//DuskoPratice - Titanic')
+  setwd('C://Users//dmladenovski//Documents//R//DuskoPratice - Titanic')
        
 #Home Pc
- setwd('C://Users//Dusko (Guest)//Documents//GitHub//DuskoPratice---Titanic')
+ #setwd('C://Users//Dusko (Guest)//Documents//GitHub//DuskoPratice---Titanic')
  
-  files <- list.files()
+  
 
 #List files names
-  read.csv2(list.files()) <- names(files)
+  files <- list.files()
 
 #Read in Files
-  Test <- read.csv2('test.csv', stringsAsFactors = FALSE, sep = ',')
-  GenderSubmission <- read.csv2('test.csv', stringsAsFactors = FALSE, sep = ',')
+  Test <- read.csv2('test.csv', stringsAsFactors = FALSE, sep = ',', na.strings = "")
+  GenderSubmission <- read.csv2('test.csv', stringsAsFactors = FALSE, sep = ',', na.strings = "")
 #TitanicInfo <- read.csv2('Titanic Info.txt', stringsAsFactors = FALSE, sep = ',')
-  Train <- read.csv2('train.csv', stringsAsFactors = FALSE, sep = ',')
+  Train <- read.csv2('train.csv', stringsAsFactors = FALSE, sep = ',', na.strings = "")
 
   Full <- bind_rows(Train, Test)
   
@@ -42,16 +42,12 @@ library(dplyr)
 
 #Table Titles
   table(Full$Sex, Full$Title)
-  
-  
+
 #Split SurNames
   Full$Surname <- sapply(Full$Name,  
                          function(x) strsplit(x, split = '[,.]')[[1]][1])
-  
-  
 #Explore Data - Survivors by Class
-
-Train %>%
+  Train %>%
   group_by(Pclass, Sex) %>%
   summarize(
     mean = mean(Survived),
@@ -60,69 +56,50 @@ Train %>%
     Died = sum(Total-Survived)
     )
 
-
-unique(Train$SibSp)
-unique(Train$Parch)
-unique(Full$Title)
-
-
-head(Full$Name)
-
-
-
-#Visualize Data - Embarked
+#Table Data - Embarked
   table(Train$Embarked, Train$Survived)
 
-# 2 Passengers do not have a point of Embarkment
-
-  ggplot(Train, aes(x = Embarked, fill = factor(Survived)))+
+# 1 Passengers do not have a point of Embarkment
+  ggplot(Full, aes(x = Embarked, fill = factor(Survived)))+
     geom_histogram(bins = 10, stat = "count", position = "dodge")
   
+  #Review Embarked missing data --- Missing embarkment are most likely 1st class and embarked from C
+  Embarked_full <- Full %>% filter(Embarked != '')
+  
+#Missing embarkment paid $80
+  ggplot(Embarked_full, aes( x = Embarked, y = as.numeric(Fare), fill = factor(Pclass))) + 
+    geom_boxplot()+
+    geom_hline(yintercept = 80, col = 'red')+
+    ylab('Fare')
 
-#Review Embarked missing data --- Missing embarkment are most likely 1st class and embarked from C
-Embarked_full <- Full %>% filter(Embarked != '')
+#Missing embarkment was 1st class and plenty of cabins in 'B' Cabin
+  Full[Full$Fare >= 75 & Full$Fare <= 85 & Full$Title == 'Mr' & Full$Embarked == 'C',]
 
-ggplot(Embarked_full, aes( x = Embarked, y = as.numeric(Fare), fill = factor(Pclass))) + 
-  geom_boxplot()+
-  geom_hline(yintercept = 80, col = 'red')+
-  ylab('Fare')
+  #Manually edit Embark point for missing data as C
+  Full$Embarked[is.na(Full$Embarked)] <- 'C'
 
-#Manually edit Embark point for missing data
-Full$Embarked[Full$Embarked == ''] <- 'C'
 #Recheck Attribute
-table(Full$Embarked)
+  table(Full$Embarked, Full$Survived)
 
+#Add Total Family Size
+  Full$FamilySize <- Full$SibSp + Full$Parch + 1
 
-#Add Family Size
-Full$FamilySize <- Full$SibSp + Full$Parch + 1
 #Visualize Data - Survival Based on Family Size
   ggplot(Full[1:891,], aes(x = FamilySize, fill = factor(Survived)))+
     geom_bar(stat = "count", position = 'dodge') + 
     scale_x_continuous(breaks = 1:11) +
     theme_classic()
   
-  #Families larger than 4 people have bad chnce of survival
-
-Full$AgeBracket <- cut_width(Full$Age, width = 10)
-
-
-
 #Check Survived by Age
-
   ggplot(Full[1:891,], aes(x = Age, fill = factor(Survived))) + 
-    geom_histogram(position = 'stack')+facet_grid(.~Sex)
-  
-  
+    geom_histogram(position = 'stack')+
+    facet_grid(.~Sex)
+
 #check missing 
   for (Var in names(Full)){
     missing <- sum(is.na(Full[,Var]))
     print(c(Var, missing)) 
   }
-  
-  Full[Full$Fare == '' | is.na(Full$Fare),]
-  Full[Full$Fare < 1,]
-
-  
   
 #Identifying Mothers and Children
   Full$Mother <- "Not Mother"
@@ -136,53 +113,42 @@ Full$AgeBracket <- cut_width(Full$Age, width = 10)
 
   
 #Attempting to use Decision Tree
-
-library('rpart')
 #library('party')
+  library('rpart')
 
-  for (i in names(Full)){
-  totals <- sum(is.na(Full$i))
-  print(totals)
-  }
-
-  #check missing data
-colSums(is.na(Full))
-colSums(Full == '')
+#check missing data
+  colSums(is.na(Full))
+  colSums(Full == '')
 
 #remove missing Age
 
-FullAge <- Full[Full$Age != ''  & !is.na(Full$Age),]
+  FullAge <- Full[Full$Age != ''  & !is.na(Full$Age),]
 
 
 #predict Age
-AgeTest <- rpart(data = FullAge[1:523, ], 
-                 formula = Age ~ Pclass + SibSp + Parch + Fare + Title + FamilySize, 
-                 method = 'poisson')
-AgePredict <- predict(AgeTest, FullAge[524:1046, ])
-
-plotcp(AgeTest)
-summary(AgeTest)
-plot(AgeTest)
+install.packages('mice')
+library(mice)
+install.packages('randomForest')
+library('randomForest')
+Train_mice <- mice(Full[, !names(Full) %in% 
+                           c('PassengerId', 'Name', 'Ticket', 'Cabin', 'Survived')], method = 'rf')
 
 
-rpart::
+Train_complete <- complete(Train_mice)
+Train$Age <- as.numeric(Train$Age)
+
+ggplot(Train, aes(x = Age))+
+  geom_line(stat = 'density', binwidth = 5, color = 'blue')+
+  geom_line(data = Train_complete, aes(x = Age), stat = 'density', binwidth = 5, color = 'red')
 
 
+#check predicted values against original data
+par(mfrow=c(1,2))
+hist(Train$Age, freq=F, main='Age: Original Data', 
+     col='darkgreen', ylim=c(0,0.04), breaks = 16)
+hist(Train_complete$Age, freq=F, main='Age: MICE Output', 
+     col='lightgreen', ylim=c(0,0.04))
 
-
-
-
-table(AgePredict)
-hist(AgePredict)
-hist(FullAge$Age)
-
-
-plotcp(AgeTest)
-  plot(AgeTest)
-  text(AgeTest)
-
-summary(AgeTest)
-  
 Fit <- rpart(formula = Survived ~ Pclass + Sex  + Fare + Age + FamilySize, data = Full[1:400,], method = 'class')
 
 rpart::plotcp(Fit)
@@ -194,13 +160,3 @@ plotcp(Fit)
 rsq.rpart(Fit)
 summary(Fit)
 prune(Fit, Fit$cptable[which.min(Fit$cptable[,"xerror"]),"CP"])
-
-FirstPred <- predict(Fit, Full[401:891,], type = 'poisson')
-
-table(Full[1:491, 2], FirstPred)
-
-length(FirstPred)
-
-
-
-
